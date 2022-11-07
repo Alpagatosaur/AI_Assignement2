@@ -152,6 +152,6 @@ cython_debug/
 #.idea/
 
 # LIB yoloV3
-lib_rec/yolo/
+lib_rec/yolo/*
 !lib_rec/yolo/cfg/yolov3.cfg
 !lib_rec/yolo/data/coco.names
