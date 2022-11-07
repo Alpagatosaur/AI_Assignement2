@@ -153,8 +153,8 @@ cython_debug/
 
 # LIB yoloV3
 
-yolo/src/*.md
-yolo/src/LICENSE.*
-yolo/src/Makefile
-yolo/*.c
-yolo/*.h
+/yolo/src/*.md
+/yolo/src/LICENSE.*
+/yolo/src/Makefile
+/yolo/*.c
+/yolo/*.h
