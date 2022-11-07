@@ -152,16 +152,19 @@ cython_debug/
 #.idea/
 
 # LIB yoloV3
-lib_rec/yolo/data/labels/
-lib_rec/yolo/src/
-lib_rec/yolo/scripts/
-lib_rec/yolo/python/
-lib_rec/yolo/include/
-lib_rec/yolo/examples/
-lib_rec/yolo/*.md
-lib_rec/yolo/LICENSE*
-lib_rec/yolo/Makefile
-lib_rec/yolo/**/*.dataset
-lib_rec/yolo/**/*.data
-lib_rec/yolo/**/*.txt
-lib_rec/yolo/**/*.list
+lib_rec/*
+!lib_rec/yolo/
+lib_rec/yolo/*
+!lib_rec/yolo/cfg/
+!lib_rec/yolo/data/
+!lib_rec/yolo/*.weights
+
+lib_rec/yolo/cfg/*
+lib_rec/yolo/data/*
+!lib_rec/yolo/cfg/yolov3-tiny.cfg
+!lib_rec/yolo/data/coco.names
+
+
+#Ignore img
+*.jpg
+!**/test.jpg
