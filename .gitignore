@@ -152,6 +152,16 @@ cython_debug/
 #.idea/
 
 # LIB yoloV3
-lib_rec/yolo/*
-!lib_rec/yolo/cfg/yolov3.cfg
-!lib_rec/yolo/data/coco.names
+lib_rec/yolo/data/labels/
+lib_rec/yolo/src/
+lib_rec/yolo/scripts/
+lib_rec/yolo/python/
+lib_rec/yolo/include/
+lib_rec/yolo/examples/
+lib_rec/yolo/*.md
+lib_rec/yolo/LICENSE*
+lib_rec/yolo/Makefile
+lib_rec/yolo/**/*.dataset
+lib_rec/yolo/**/*.data
+lib_rec/yolo/**/*.txt
+lib_rec/yolo/**/*.list
