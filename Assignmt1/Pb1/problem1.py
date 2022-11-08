@@ -1,3 +1,5 @@
+# Just run the file
+
 import cv2
 import os
 
