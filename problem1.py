@@ -75,7 +75,7 @@ def creat_model():
     print(feature_batch_average.shape)
     
     "Convert features into a predict per img"
-    prediction_layer = tf.keras.layers.Dense(1)
+    prediction_layer = tf.keras.layers.Dense(10) # 10 == dimensionality of the output space
     prediction_batch = prediction_layer(feature_batch_average)
     print(prediction_batch.shape)
     
