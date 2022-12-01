@@ -1,208 +1,148 @@
 # -*- coding: utf-8 -*-
-import tensorflow as tf
 import matplotlib.pyplot as plt
 import os
 from keras.applications.vgg16 import VGG16
+
+import numpy as np
+
+from tensorflow.keras.models import load_model
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.layers import Dense, Flatten, BatchNormalization
+from keras.models import Sequential
+import cv2
+import glob
+import splitfolders
 
 # PATH
 path_file = os.getcwd()
 os.path.dirname(os.path.abspath(path_file))
 
+output_dir = os.path.join(path_file, 'train_val_test')
 img_dir = os.path.join(path_file, 'data_img')
-model_dir = os.path.join(path_file, 'my_model.h5')
+model_dir = os.path.join(path_file, 'model.h5')
 
-BATCH_SIZE = 32
-IMG_SIZE = (160, 160)
+BATCH_SIZE = 100
+EPOCHS = 5
+learning_rate = 0.0001
+MIN_IMGS_IN_CLASS=500;
+image_size = 50;
+nb_classes = 11
 
+list_all_img = glob.glob(img_dir + "/*/*.png")
 
-def creat_model():
+# Resize img
+def preprocess(my_img):
+    height, width = my_img.shape[:2]
+    scale = image_size / max(height, width)
+    dx = (image_size - scale * width) / 2
+    dy = (image_size - scale * height) / 2
+    trans = np.array([[scale, 0, dx], [0, scale, dy]], dtype=np.float32)
+    my_img = cv2.warpAffine(my_img, trans, (image_size, image_size), flags=cv2.INTER_AREA)
+    my_img = cv2.resize(my_img, (image_size, image_size))
+    return my_img
 
-    # Create dataset
-    train_dataset = tf.keras.utils.image_dataset_from_directory(
-      img_dir,
-      validation_split=0.1,
-      subset="training",
-      seed=123,
-      image_size = IMG_SIZE,
-      batch_size = BATCH_SIZE)
-    
-    validation_dataset = tf.keras.utils.image_dataset_from_directory(
-      img_dir,
-      validation_split=0.1,
-      subset="validation",
-      seed=123,
-      image_size = IMG_SIZE)
-    
-    # Get all name taffic sign
-    class_names = train_dataset.class_names
-    
-    # From validation dataset, get test dataset
-    val_batches = tf.data.experimental.cardinality(validation_dataset)
-    test_dataset = validation_dataset.take(val_batches // 5)
-    validation_dataset = validation_dataset.skip(val_batches // 5)
-    
-    # Config the dataset performaence
-    AUTOTUNE = tf.data.AUTOTUNE
-    
-    train_dataset = train_dataset.prefetch(buffer_size=AUTOTUNE)
-    validation_dataset = validation_dataset.prefetch(buffer_size=AUTOTUNE)
-    test_dataset = test_dataset.prefetch(buffer_size=AUTOTUNE)
-    
-    # Data augmentation (turn img in diff deg)
-    data_augmentation = tf.keras.Sequential([
-      tf.keras.layers.RandomFlip('horizontal'),
-      tf.keras.layers.RandomRotation(0.2),
-    ])
-    
-    
-    # Rescale pixel values
-    preprocess_input = tf.keras.applications.mobilenet_v2.preprocess_input
-    
-    
-    # load the pre model VGG16
-    base_model  =  VGG16(weights="imagenet", include_top=False)
-    
-    image_batch, label_batch = next(iter(train_dataset))
-    feature_batch = base_model(image_batch)
-    print(feature_batch.shape)
-    
-    # Freeze the convolution base
-    base_model.trainable = False
-    
-    # Add a classification head
-    global_average_layer = tf.keras.layers.GlobalAveragePooling2D()
-    feature_batch_average = global_average_layer(feature_batch)
-    print(feature_batch_average.shape)
-    
-    "Convert features into a predict per img"
-    prediction_layer = tf.keras.layers.Dense(10) # 10 == dimensionality of the output space
-    prediction_batch = prediction_layer(feature_batch_average)
-    print(prediction_batch.shape)
-    
-    # Build a model
-    inputs = tf.keras.Input(shape=(160, 160, 3))
-    x = data_augmentation(inputs)
-    x = preprocess_input(x)
-    x = base_model(x, training=False)
-    x = global_average_layer(x)
-    x = tf.keras.layers.Dropout(0.2)(x)
-    outputs = prediction_layer(x)
-    model = tf.keras.Model(inputs, outputs)
-    
-    # Compile the model
-    base_learning_rate = 0.0001
-    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=base_learning_rate),
-                  loss=tf.keras.losses.BinaryCrossentropy(from_logits=True),
-                  metrics=['accuracy'])
+# Shuffle
+def mixing(images, labels):
+    images = np.array(images)
+    labels = np.array(labels)
+    s = np.arange(images.shape[0])
+    np.random.seed(1337)
+    np.random.shuffle(s)
+    images=images[s]
+    labels=labels[s]
+    return images, labels
 
-    # Train model
-    initial_epochs = 10
-    loss0, accuracy0 = model.evaluate(validation_dataset)
-    history = model.fit(train_dataset,
-                    epochs=initial_epochs,
-                    validation_data=validation_dataset)
+# Read all img in the folder
+def load_img(list_path):
+    list_images = []
+    list_labels = []
+    for img_path in list_path:
+        path_split = img_path.split("\\")
+        img = cv2.imread(img_path)
+        list_images.append(preprocess(img))
+        list_labels.append(int(path_split[-2]))
+    return mixing(list_images, list_labels)
 
-    # Un-freeze the top layer
-    base_model.trainable = True
-    # Fine-tune from this layer onwards
-    fine_tune_at = 100
-    
-    # Freeze all the layers before the `fine_tune_at` layer
-    for layer in base_model.layers[:fine_tune_at]:
-      layer.trainable = False
+# Train model
+def train_model(model):
+    adam = Adam(lr=learning_rate)
+    # SparseCategoricalCrossentropy == to provide labels as integers
+    model.compile(optimizer=adam, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
 
-    # Compile model
-    model.compile(loss=tf.keras.losses.BinaryCrossentropy(from_logits=True),
-              optimizer = tf.keras.optimizers.RMSprop(learning_rate=base_learning_rate/10),
-              metrics=['accuracy'])
+    history = model.fit(train_img, train_labels,
+                        batch_size=BATCH_SIZE, epochs=EPOCHS, validation_split=0.2, shuffle = True, verbose=1)
+    #loss: 2.1762 - accuracy: 0.1870 - val_loss: 2.6660 - val_accuracy: 0.1656
+    #loss: 1.6501 - accuracy: 0.3529 - val_loss: 3.1875 - val_accuracy: 0.1885
+    #loss: 1.0064 - accuracy: 0.5773 - val_loss: 1.9096 - val_accuracy: 0.3829
+    #loss: 0.4988 - accuracy: 0.8185 - val_loss: 6.1963 - val_accuracy: 0.4919
+    #loss: 0.2163 - accuracy: 0.9337 - val_loss: 1.0803 - val_accuracy: 0.6834
+    model.summary()
+    model.save('model.h5')
 
-    # Train model
-    fine_tune_epochs = 10
-    total_epochs =  initial_epochs + fine_tune_epochs
+    # Show evolution of accurracy/ loss depending on epoch
+    plt.figure(figsize=(12, 12))
+    plt.subplot(3, 2, 1)
+    plt.plot(history.history['accuracy'], label = 'train_accuracy')
+    plt.plot(history.history['val_accuracy'], label = 'val_accuracy')
+    plt.xlabel('epoch')
+    plt.ylabel('accuracy')
+    plt.legend()
+    plt.subplot(3, 2, 2)
+    plt.plot(history.history['loss'], label = 'train_loss')
+    plt.plot(history.history['val_loss'], label = 'val_loss')
+    plt.xlabel('epoch')
+    plt.ylabel('accuracy')
+    plt.legend()
+    plt.show()
     
-    history_fine = model.fit(train_dataset,
-                             epochs=total_epochs,
-                             initial_epoch=history.epoch[-1],
-                             validation_data=validation_dataset)
-
-    loss, accuracy = model.evaluate(test_dataset)
-    
-    print("loss : ", loss)
-    print("accuracy : ", accuracy)
-    
-    model.save('my_model.h5')
-    
-    
-    
-    # Retrieve a batch of images from the test set
-    image_batch, label_batch = test_dataset.as_numpy_iterator().next()
-    predictions = model.predict_on_batch(image_batch).flatten()
-    
-    # Apply a sigmoid since our model returns logits
-    predictions = tf.nn.sigmoid(predictions)
-    predictions = tf.where(predictions < 0.5, 0, 1)
-    
-    print('Predictions:\n', predictions.numpy())
-    print('Labels:\n', label_batch)
-    
-    plt.figure(figsize=(10, 10))
-    for i in range(3):
-      plt.imshow(image_batch[i].astype("uint8"))
-      plt.title(class_names[predictions[i]])
-      plt.axis("off")
-    
-    """
-    model.save('my_model.h5')
-    
-    img = image.load_img(img_path, target_size=(160, 160))
-    pred = model.predict(img)
-    """
-
-def test():
-    validation_dataset = tf.keras.utils.image_dataset_from_directory(
-    img_dir,
-    validation_split=0.1,
-    subset="validation",
-    seed=123,
-    image_size = IMG_SIZE)
-    
-    class_names = validation_dataset.class_names
-    
-    val_batches = tf.data.experimental.cardinality(validation_dataset)
-    test_dataset = validation_dataset.take(val_batches // 5)
-    validation_dataset = validation_dataset.skip(val_batches // 5)
-    
-    model = tf.keras.models.load_model(model_dir)
-
-    loss, accuracy = model.evaluate(test_dataset)
-    
-    print("loss : ", loss)
-    print("accuracy : ", accuracy)
-    
-    
-    # Retrieve a batch of images from the test set
-    image_batch, label_batch = test_dataset.as_numpy_iterator().next()
-    predictions = model.predict_on_batch(image_batch).flatten()
-    
-    # Apply a sigmoid since our model returns logits
-    predictions = tf.nn.sigmoid(predictions)
-    predictions = tf.where(predictions < 0.5, 0, 1)
-    
-    print('Predictions:\n', predictions.numpy())
-    print('Labels:\n', label_batch)
-    
-    plt.figure(figsize=(10, 10))
-    for i in range(3):
-      plt.imshow(image_batch[i].astype("uint8"))
-      plt.title(class_names[predictions[i]])
-      plt.axis("off")
-      
-
 
 if __name__ == "__main__":
-    x = input("Do you want to re-creat the model? (yes or no) ->  ")
+    x = input("Do you want to re-create the model? (yes or no) ->  ")
     if x == "yes":
-        creat_model()
+        if not os.path.exists(output_dir):
+            os.mkdir(output_dir)
+            # To only split into training and validation set, set a tuple to `ratio`, i.e, `(.8, .2)`.
+            splitfolders.ratio(img_dir, output=output_dir, seed=1337, ratio=(.8, .1, .1))
+
+        # Load test dataset
+        test_dir = os.path.join(path_file, 'train_val_test', 'test')
+        list_train_img = glob.glob(test_dir + "/*/*.png")
+        test_img, test_labels = load_img(list_train_img)
+        print(test_img.shape)
+        print(test_labels.shape)
+
+        # Load train dataset
+        train_dir = os.path.join(path_file, 'train_val_test', 'train')
+        list_train_img = glob.glob(train_dir + "/*/*.png")
+        train_img, train_labels = load_img(list_train_img)
+        
+        # Create model
+        model = Sequential()
+        model.add(VGG16(weights='imagenet', include_top=False, input_shape=(image_size, image_size,3)))
+        model.add(BatchNormalization())
+        model.add(Flatten())
+        model.add(Dense(1024, activation='relu'))
+        model.add(Dense(nb_classes, activation='softmax'))
+        
+        # Train model
+        train_model(model)
+
+        # Test model
+        test_loss, test_acc = model.evaluate(test_img, test_labels)
+        print('Test accuracy:', test_acc) # 0.68
+        print('Test loss:', test_loss) # 1.07
+        
     x = input("Do you want to test the model (just test accuracy)? (yes or no) ->  ")
     if x == "yes":
-        test()
+        # Load test dataset
+        test_dir = os.path.join(path_file, 'train_val_test', 'test')
+        list_train_img = glob.glob(test_dir + "/*/*.png")
+        test_img, test_labels = load_img(list_train_img)
+        print(test_img.shape)
+        print(test_labels.shape)
+        
+        model = load_model(model_dir)
+        
+        test_loss, test_acc = model.evaluate(test_img, test_labels)
+        print('Test accuracy:', test_acc) # 0.68
+        print('Test loss:', test_loss) # 1.07
