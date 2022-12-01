@@ -152,7 +152,5 @@ cython_debug/
 #.idea/
 
 
-#Ignore img
-test/*
-validation/*
-train/*
+#Ignore train val test
+train_val_test/*
