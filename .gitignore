@@ -154,3 +154,6 @@ cython_debug/
 
 #Ignore train val test
 train_val_test/*
+
+Ignore model.h5
+.h5
