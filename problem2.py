@@ -30,7 +30,6 @@ tflite_model = converter.convert()
 
 end = time.time()
 
-print("TIMER : ", int(end - start), "s\n")
 
 # TIMER :  9 s
 
@@ -62,26 +61,94 @@ list_test_img = glob.glob(test_dir + "/*/*.png")
 test_img, test_labels = load_img(list_test_img)
 
 # Test with 10 img
-nb_test_img = 10
+nb_test_img = 25
+
+# RESULTS VAR
+avg_acc_tflite = 0
+avg_acc_model = 0
+
+time_tflite = 0
+time_model = 0
 
 for i in range(nb_test_img):
     img_8 = test_img[i]
     label = test_labels[i]
     img_32 = img_8.astype('float32')
     img_32 = np.expand_dims(img_32, axis=0)
-    interpreter.set_tensor(input_details[0]['index'], img_32)
-
-    interpreter.invoke()
     
+    start = time.time()
+    interpreter.set_tensor(input_details[0]['index'], img_32)
+    interpreter.invoke()
     output_tflite = interpreter.get_tensor(output_details[0]['index'])
+    end = time.time()
+    
+    time_tflite += end-start
+    
+    
+    start = time.time()
     output_model = model.predict(img_32)
+    end = time.time()
+    
+    time_model += end-start
+    
+
+    if output_tflite[0].argmax() == label:
+        avg_acc_tflite += 1
+        
+    if output_model[0].argmax() == label:
+        avg_acc_model += 1
+
+    
+
+print(f'\nOUTPUT AVERAGE ACCURACY TFLITE {100*avg_acc_tflite/nb_test_img:.2f} %')
+print(f'OUTPUT AVERAGE ACCURACY MODEL  {100*avg_acc_model/nb_test_img:.2f} %')
+print("___________________________")
+print(f'TIME TFLITE  {1000*time_tflite/nb_test_img:.2f} ms')
+print(f'TIME MODEL   {1000*time_model/nb_test_img:.2f} ms')
+print("_______________________\n")
+
+
+print("END COMPARAISON\n")
+
+print("SIZE OF TFLite : 59 591 Ko")
+print("SIZE OF MODEL  : 178 860 Ko")
+
+print("TFLite represents 33% of MODEL's size")
+
+
+
+
+"""
+OUTPUT AVERAGE ACCURACY TFLITE 92.00 %
+OUTPUT AVERAGE ACCURACY MODEL  92.00 %
+___________________________
+TIME TFLITE  44.69 ms
+TIME MODEL   117.54 ms
+_______________________
+
+END COMPARAISON
+
+SIZE OF TFLite : 59 591 Ko
+SIZE OF MODEL  : 178 860 Ko
+TFLite represents 33% of MODEL's size
+"""
+
+
+
+
+
+
+
+
+
+
+"""
 
     print(" OUTPUT TFLITE ", output_tflite[0].argmax(), max(output_tflite[0]))
     print(" OUTPUT MODEL  ", output_model[0].argmax(), max(output_model[0]))
     print(" LABEL  ", label)
     print("_______________________\n")
 
-"""
 1/1 [==============================] - 0s 281ms/step
  OUTPUT TFLITE  2 0.5272661
  OUTPUT MODEL   2 0.5272658
@@ -141,12 +208,4 @@ _______________________
  OUTPUT MODEL   1 0.997813
  LABEL   1
 _______________________
-
-
 """
-print("END COMPARAISON\n")
-
-print("SIZE OF TFLite : 59 591 Ko")
-print("SIZE OF MODEL  : 178 860 Ko")
-
-print("TFLite represents 33% of MODEL's size")
